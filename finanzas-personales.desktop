@@ -1,0 +1,17 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Finanzas Personales
+Name[es]=Finanzas Personales
+Name[en]=Personal Finance
+Comment=Sistema completo de gestión de finanzas personales
+Comment[es]=Sistema completo de gestión de finanzas personales
+Comment[en]=Complete personal finance management system
+Exec=/home/thspin/finanzas-personales/start.sh
+Icon=/home/thspin/finanzas-personales/assets/finanzas_icon.svg
+Terminal=false
+StartupNotify=true
+Categories=Office;Finance;
+MimeType=application/x-desktop;
+Keywords=finanzas;dinero;presupuesto;transacciones;creditos;finance;money;budget;transactions;credits;
+StartupWMClass=streamlit
