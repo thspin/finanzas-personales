@@ -106,6 +106,9 @@ def main():
             st.session_state.current_page = "transactions"
         elif st.session_state.quick_action == "credit":
             st.session_state.current_page = "credits"
+        # Guardar estado de página
+        from simple_navigation import save_page_state
+        save_page_state(st.session_state.current_page)
         # Clear quick action
         del st.session_state.quick_action
         st.rerun()
@@ -118,10 +121,14 @@ def main():
     with col1:
         if st.sidebar.button("💰 Nueva Transacción", key="quick_trans"):
             st.session_state.current_page = "transactions"
+            from simple_navigation import save_page_state
+            save_page_state("transactions")
             st.rerun()
     with col2:
         if st.sidebar.button("🏧 Nuevo Crédito", key="quick_cred"):
             st.session_state.current_page = "credits"
+            from simple_navigation import save_page_state
+            save_page_state("credits")
             st.rerun()
     
     # Show breadcrumbs
@@ -313,6 +320,17 @@ def show_dashboard():
 
 def show_products_page():
     """Page to manage financial products"""
+    # Manejar rerun después de crear producto
+    if st.session_state.get('should_rerun', False):
+        st.session_state.should_rerun = False
+        st.rerun()
+        
+    # Manejar flag de producto creado
+    if st.session_state.get('product_created', False):
+        st.session_state.product_created = False
+        st.balloons()
+        st.success("🎉 ¡Producto creado! Actualiza la página o cambia de tab para ver el nuevo producto.")
+    
     st.header("🏦 Gestionar Productos Financieros")
     st.write("Administra tus productos financieros: cuentas de ahorro, corrientes, tarjetas de crédito, etc.")
     
@@ -327,91 +345,131 @@ def show_products_page():
 
 
 def show_create_product_form():
-    """Form to create new financial product"""
+    """Form to create new financial product - SIMPLIFIED FOR DEBUGGING"""
     st.subheader("➕ Crear Nuevo Producto Financiero")
+    
+    # DEBUG: Mostrar información de depuración
+    st.info("🔍 **Modo DEBUG activado** - Formulario simplificado para diagnosticar problemas")
     
     api = get_api_client()
     
     try:
         # Load required data
-        currencies = api.get_currencies()
-        institutions = api.get_institutions()
+        with st.spinner("Cargando datos..."):
+            currencies = api.get_currencies()
+            institutions = api.get_institutions()
         
-        # Step 1: Institution selection (outside form for reactivity)
-        st.markdown("#### 1️⃣ Seleccionar o Crear Institución")
-        institution_data = institution_selector_or_create(institutions, "product_institution")
+        st.success(f"✅ Datos cargados: {len(institutions)} instituciones, {len(currencies)} monedas")
         
-        if institution_data["type"] == "none":
-            st.info("👆 Selecciona o crea una institución para continuar")
+        # DEBUG: Mostrar datos cargados
+        with st.expander("🔍 Ver datos cargados (DEBUG)"):
+            st.write("**Instituciones:**", institutions)
+            st.write("**Monedas:**", currencies)
+        
+        # Mostrar mensaje si no hay instituciones
+        if not institutions:
+            st.warning("⚠️ No hay instituciones. Crea una primero.")
+            with st.form("create_institution_form"):
+                st.markdown("#### Crear Institución")
+                inst_name = st.text_input("Nombre", placeholder="Ej: Banco Galicia")
+                inst_logo = st.text_input("Logo URL (opcional)")
+                
+                if st.form_submit_button("Crear Institución"):
+                    if inst_name.strip():
+                        try:
+                            result = api.create_institution({
+                                "name": inst_name.strip(), 
+                                "logo_url": inst_logo.strip() if inst_logo else None
+                            })
+                            st.success(f"✅ Institución creada: {result}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error creando institución: {str(e)}")
+                    else:
+                        st.error("❌ Nombre requerido")
             return
         
-        # Step 2: Product details form
-        st.markdown("#### 2️⃣ Detalles del Producto")
+        # Formulario principal - SIMPLIFICADO
+        with st.form("simple_product_form"):
+            st.markdown("#### Datos del Producto")
+            
+            # Selección de institución simple
+            institution_names = [inst['name'] for inst in institutions]
+            selected_inst_name = st.selectbox("🏛️ Institución", institution_names)
+            selected_institution = next(inst for inst in institutions if inst['name'] == selected_inst_name)
+            
+            # Tipo de producto
+            product_types = {
+                "CHECKING_ACCOUNT": "Cuenta Corriente",
+                "SAVINGS_ACCOUNT": "Caja de Ahorro", 
+                "CREDIT_CARD": "Tarjeta de Crédito",
+                "INVESTMENT": "Inversión",
+                "LOAN": "Préstamo"
+            }
+            selected_type = st.selectbox("📝 Tipo", list(product_types.keys()), format_func=lambda x: product_types[x])
+            
+            # Identificador
+            identifier = st.text_input("🔢 Identificador", placeholder="****1234")
+            
+            # Moneda simple
+            currency_names = [f"{curr['code']} - {curr['name']}" for curr in currencies]
+            selected_curr_name = st.selectbox("💱 Moneda", currency_names)
+            selected_currency = next(curr for curr in currencies if f"{curr['code']} - {curr['name']}" == selected_curr_name)
+            
+            # Día de vencimiento
+            payment_day = st.number_input("📅 Día Vencimiento", 1, 31, 15)
+            
+            # Submit
+            submitted = st.form_submit_button("✅ CREAR PRODUCTO", use_container_width=True)
+            
+            # DEBUG: Mostrar datos del formulario
+            if st.form_submit_button("🔍 Ver datos (DEBUG)"):
+                st.write("**Datos del formulario:**")
+                st.json({
+                    "institution_id": selected_institution['id'],
+                    "product_type": selected_type,
+                    "identifier": identifier,
+                    "currency_id": selected_currency['id'],
+                    "payment_due_day": payment_day if selected_type == "CREDIT_CARD" else None
+                })
         
-        with st.form("create_product_form"):
-            col1, col2 = st.columns(2)
+        # Procesar formulario FUERA del with form
+        if submitted:
+            st.info("🔄 Procesando formulario...")
             
-            with col1:
-                product_type = st.selectbox("📝 Tipo de Producto", [
-                    "CHECKING_ACCOUNT",
-                    "SAVINGS_ACCOUNT", 
-                    "CREDIT_CARD",
-                    "INVESTMENT",
-                    "LOAN",
-                    "OTHER"
-                ], format_func=lambda x: {
-                    "CHECKING_ACCOUNT": "Cuenta Corriente",
-                    "SAVINGS_ACCOUNT": "Caja de Ahorro",
-                    "CREDIT_CARD": "Tarjeta de Crédito",
-                    "INVESTMENT": "Cuenta de Inversión",
-                    "LOAN": "Préstamo",
-                    "OTHER": "Otro"
-                }[x])
+            if not identifier.strip():
+                st.error("❌ Identificador requerido")
+                return
                 
-                identifier = st.text_input("🔢 Identificador", placeholder="Ej: ****1234")
+            product_data = {
+                "institution_id": selected_institution['id'],
+                "product_type": selected_type,
+                "identifier": identifier.strip(),
+                "currency_id": selected_currency['id'],
+                "payment_due_day": payment_day if selected_type == "CREDIT_CARD" else None
+            }
             
-            with col2:
-                # Currency selector
-                currency_options = {f"{curr['symbol']} {curr['code']} - {curr['name']}": curr['id'] for curr in currencies}
-                selected_currency_display = st.selectbox("💱 Moneda", list(currency_options.keys()))
-                selected_currency_id = currency_options[selected_currency_display]
+            st.write("🔍 **Datos a enviar:**", product_data)
+            
+            try:
+                with st.spinner("Creando producto..."):
+                    result = api.create_product(product_data)
                 
-                payment_due_day = st.number_input(
-                    "📅 Día de Vencimiento (solo tarjetas)", 
-                    min_value=1, max_value=31, value=15
-                )
-            
-            submitted = st.form_submit_button("✅ Crear Producto", use_container_width=True)
-            
-            if submitted:
-                try:
-                    # Handle institution
-                    if institution_data["type"] == "new":
-                        institution = api.create_institution(institution_data["data"])
-                        institution_id = institution['id']
-                    else:
-                        institution_id = institution_data["data"]['id']
-                    
-                    # Create product
-                    product_data = {
-                        "institution_id": institution_id,
-                        "product_type": product_type,
-                        "identifier": identifier or f"****{datetime.now().strftime('%H%M%S')}",
-                        "currency_id": selected_currency_id,
-                        "payment_due_day": payment_due_day if product_type == "CREDIT_CARD" else None
-                    }
-                    
-                    with st.spinner("Creando producto..."):
-                        api.create_product(product_data)
-                    
-                    st.success("✅ Producto creado exitosamente!")
-                    st.rerun()
-                    
-                except Exception as e:
-                    handle_api_error(e, "crear producto")
+                st.success("✅ ¡Producto creado exitosamente!")
+                st.json(result)
+                
+                # Limpiar cache y marcar para reload
+                from components.performance import clear_performance_cache
+                clear_performance_cache()
+                st.session_state.product_created = True
+                
+            except Exception as e:
+                st.error(f"❌ Error creando producto: {str(e)}")
+                st.exception(e)
                     
     except Exception as e:
-        handle_api_error(e, "cargar datos")
+        st.error(f"❌ Error cargando datos: {str(e)}")
+        st.exception(e)
 
 
 def show_products_list():

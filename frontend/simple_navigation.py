@@ -1,11 +1,36 @@
 import streamlit as st
+import os
+import json
+
+def load_page_state():
+    """Cargar estado de página desde archivo temporal"""
+    try:
+        temp_file = f"/tmp/finanzas_page_state_{os.environ.get('USER', 'default')}.json"
+        if os.path.exists(temp_file):
+            with open(temp_file, 'r') as f:
+                data = json.load(f)
+                return data.get('current_page', 'dashboard')
+    except:
+        pass
+    return 'dashboard'
+
+def save_page_state(page):
+    """Guardar estado de página en archivo temporal"""
+    try:
+        temp_file = f"/tmp/finanzas_page_state_{os.environ.get('USER', 'default')}.json"
+        with open(temp_file, 'w') as f:
+            json.dump({'current_page': page}, f)
+    except:
+        pass
 
 def simple_navigation():
-    """Navegación simplificada y robusta"""
+    """Navegación simplificada y robusta con persistencia"""
     
-    # Inicializar página actual si no existe
+    # Inicializar página actual con persistencia
     if 'current_page' not in st.session_state:
-        st.session_state.current_page = "dashboard"
+        # Intentar cargar desde archivo temporal
+        saved_page = load_page_state()
+        st.session_state.current_page = saved_page
     
     # Opciones del menú
     menu_options = {
@@ -39,7 +64,12 @@ def simple_navigation():
         else:
             if st.sidebar.button(display_name, key=f"nav_{page_key}"):
                 st.session_state.current_page = page_key
+                # Guardar estado de página
+                save_page_state(page_key)
                 st.rerun()
+    
+    # Guardar estado actual al final (para persistencia en refresh)
+    save_page_state(st.session_state.current_page)
     
     return st.session_state.current_page
 
